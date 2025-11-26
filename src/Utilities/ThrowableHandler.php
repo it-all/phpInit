@@ -144,7 +144,7 @@ class ThrowableHandler
 
     private static function generateMessage(string $messageBody): string
     {
-        $message = "[".date('d-M-Y H:i:s e', $_SERVER["REQUEST_TIME"])."] ";
+        $message = "[" . date('d-M-Y H:i:s e', $_SERVER["REQUEST_TIME"]) . "] ";
         if (PHP_SAPI == 'cli') {
             global $argv;
             $message .= "Command line: " . $argv[0];
