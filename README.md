@@ -2,6 +2,7 @@
 Initialize a PHP page controller app with autoload, important PHP settings, and a custom error handler.  
 
 ## Usage  
+Clone this repo.  
 Install the Composer dependencies:  
 ```
 php composer.phar update
@@ -12,6 +13,11 @@ Create public directory on the same level as src. Create index.php, or any php f
 require __DIR__ . '/../src/init.php';
 ```
 Your class files can be autoloaded anywhere under the src directory. It's recommended to create a Domain directory for your include files.  
+
+To Upgrade:
+```
+git pull
+```
 
 ## Why Page Controller?  
 Why Front Controller? [Why framework?](https://toys.lerdorf.com/the-no-framework-php-mvc-framework) Not all apps need all that. Minimal overhead, maximum performance and flexibility.  
