@@ -1,5 +1,5 @@
 # phpInit  
-Initialize a PHP page controller app with important PHP settings and a custom error handler.  
+Initialize a PHP page controller app with autoload, important PHP settings, and a custom error handler.  
 
 ## Usage  
 Install the Composer dependencies:  
@@ -10,12 +10,13 @@ Create public directory on the same level as src. Create index.php, or any php f
 ```
 require __DIR__ . '/../src/init.php';
 ```
+Your class files can be autoloaded anywhere under the src directory. It's recommended to create a Domain directory for your include files.  
 
 ## Why Page Controller?  
 Why Front Controller? [Why framework?](https://toys.lerdorf.com/the-no-framework-php-mvc-framework) Not all apps need all that. Minimal overhead, maximum performance and flexibility.  
 
 ## Custom Error Handler  
-Handles as many PHP errors as possible.  
+Handles as many PHP errors and uncaught exceptions as possible. Provides a stack trace to help debug.  
 1. Display  
 - Does not display errors on production server.  
 - Optionally displays errors on test servers.  
@@ -24,4 +25,4 @@ Handles as many PHP errors as possible.
 - Logs to file configured in .env.  
 
 3. Email  
-Coming Soon. Will use PHPMailer and limit # of emails per hour (I learned this the hard way, as errors on every page load caused my server to bog down with thousands of email sends).  
+Coming Soon. Will use PHPMailer and limit # of emails per hour (otherwise errors on every page load can cause server slowdown).  
