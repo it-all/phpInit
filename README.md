@@ -2,7 +2,7 @@
 Initialize a PHP page controller app with autoload, important PHP settings, and a custom error handler.  
 
 ## Installation & Usage  
-Clone this repo.  
+Clone this repo  
 Install the Composer dependencies:  
 ```
 php composer.phar update
@@ -12,7 +12,7 @@ Create public directory on the same level as src. Create index.php, or any php f
 ```
 require __DIR__ . '/../src/init.php';
 ```
-Your class files can be autoloaded anywhere under the src directory. It's recommended to create a Domain directory for your include files.  
+Your class files can be autoloaded anywhere under the src directory. It's recommended to create a Domain directory under src for your include files.  
 
 To upgrade:
 ```
@@ -33,4 +33,5 @@ Handles as many PHP errors and uncaught exceptions as possible. Provides a stack
 - Logs to file configured in .env.  
 
 3. Email  
-Coming Soon. Will use PHPMailer and limit # of emails per hour (otherwise errors on every page load can cause server slowdown).  
+- Emails errors to webmaster configured in .env.  
+- Only emails if less than 10 emails have been sent in the past hour (otherwise emails on every page load can cause server slowdown).  
