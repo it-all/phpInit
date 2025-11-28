@@ -2,6 +2,9 @@
 declare(strict_types=1);
 namespace Utilities;
 
+use DateTimeImmutable;
+use Utilities\PHPMailerService;
+
 class ThrowableHandler
 {
     private static $logFilePath;
@@ -9,17 +12,43 @@ class ThrowableHandler
     private $echoInBrowser;
     private $fatalRedirectPage;
     private $fatalHtml;
+    private $emailer;
+    private $webmasterEmail;
+    private $emailFailMessage;
+    private $emailLogPath;
+    private $emailLogHandle;
+    private $isEmailLogFileOpenError;
+    private $isEmailLogFileWriteError;
+    const MAX_EMAIL_PER_HOUR = 10;
+
+    /**
+     * email error if true
+     * set true if 
+     * - emailer not null and 
+     * - webmasterEmail not null and 
+     * - the error is not an email send error (avoid infinite loop) and
+     * - <= than MAX_EMAIL_PER_HOUR have been sent in past hour
+     */
+    private $isSendEmail;
 
     /**
      * if not null, fatal message will be echoed upon fatal errors which do not redirect
+     * email is not sent from command line
      */
-    public function __construct(string $logFilePath, int $maxErrorLogChars, ?bool $echoInBrowser = false, ?string $fatalRedirectPage = null, ?string $fatalHtml = null)
+    public function __construct(string $logFilePath, int $maxErrorLogChars, ?bool $echoInBrowser = false, ?string $fatalRedirectPage = null, ?string $fatalHtml = null, ?PHPMailerService $emailer = null, ?string $webmasterEmail = null, ?string $emailFailMessage = null, ?string $emailLogPath = null)
     {
         self::$logFilePath = $logFilePath;
         self::$maxErrorLogChars = $maxErrorLogChars;
         $this->echoInBrowser = $echoInBrowser;
         $this->fatalRedirectPage = $fatalRedirectPage;
         $this->fatalHtml = $fatalHtml;
+        $this->emailer = $emailer;
+        $this->webmasterEmail = $webmasterEmail;
+        $this->emailFailMessage = $emailFailMessage;
+        $this->emailLogPath = $emailLogPath;
+        $this->emailLogHandle = null; // init
+        $this->isEmailLogFileOpenError = false; // init
+        $this->isEmailLogFileWriteError = false; // init
     }
 
     /**
@@ -42,6 +71,7 @@ class ThrowableHandler
 
         $message = $this->generateMessageBody($errno, $errstr, $errfile, $errline) . PHP_EOL . "Stack Trace:". PHP_EOL . $this->getDebugBacktraceString();
         
+        $this->setIsSendEmail($message);
         $this->handle($message);
 
         /** Don't execute PHP internal error handler */
@@ -59,6 +89,7 @@ class ThrowableHandler
         $message = $this->generateMessageBody($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
         $message .= PHP_EOL . "Stack Trace:" . PHP_EOL . $this->jTraceEx($e);
         $die = ($e->getCode() === 0 || $e->getCode() == E_ERROR || $e->getCode() == E_USER_ERROR) ? true : false;
+        $this->setIsSendEmail($e->getMessage());
         $this->handle($message, $die);
     }
 
@@ -78,7 +109,69 @@ class ThrowableHandler
             return;    
         }
         $message = $this->generateMessageBody($error["type"], $error["message"], $error["file"], $error["line"]);
+        $this->setIsSendEmail($error["message"]);
         $this->handle($message, true);
+    }
+
+    /*
+     * - log to file
+     * - echo - always from cli, otherwise depends on echoInBrowser property
+     * - email if necessary
+     * - die or redirect if necessary
+     */
+    private function handle(string $messageBody, bool $isDie = false)
+    {
+        /** happens when an expression is prefixed with @ (meaning: ignore errors) */
+        if (error_reporting() == 0) {
+            return;
+        }
+
+        $errorMessage = self::generateMessage($messageBody);
+
+        /** log to file */
+        self::logError($errorMessage, false, $this->echoInBrowser);
+
+        /**
+         * echo
+         * email
+         * die / redirect
+         */
+        if (PHP_SAPI == 'cli') {
+            echo $errorMessage;
+            if ($isDie) {
+                echo "\n";
+                die("FATAL");
+            }
+        } else {
+            if ($this->echoInBrowser) {
+                echo nl2br(htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'), false);
+                $dieMessage = '';
+            } else {
+                $dieMessage = $this->fatalHtml;
+            }
+
+            /** email if necessary */
+            if ($this->isSendEmail) {
+                if (!$this->emailer->send($_SERVER['HTTP_HOST'] . " Error Notification", $errorMessage, [$this->webmasterEmail])) {
+                    self::logError("Error Notification Email Send Failure");
+                }
+            } elseif ($this->isEmailLogFileOpenError || $this->isEmailLogFileWriteError) {
+                $word = ($this->isEmailLogFileOpenError) ? 'Open' : 'Write';
+                self::logError("Error Notification Email Log File $word Error. Check file and permissions");
+            }
+
+            /** die or redirect */
+            if ($isDie) {
+                /** do not redirect if the redirect page is the current page with error */
+                if ($this->fatalRedirectPage != null && (!isset($_SERVER['REQUEST_URI']) || !strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI'])) ) {
+                    if (!(isset($_SERVER['REQUEST_URI']) && strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI']))) {
+                        header("Location: $this->fatalRedirectPage");
+                        exit();
+                    }
+                }
+                die($dieMessage);
+            }
+        }
     }
 
     public static function logError(string $message, bool $generateMessageWrappers = true, bool $echoError = false) 
@@ -95,64 +188,80 @@ class ThrowableHandler
         }
     }
 
-    /*
-     * - log to file
-     * - echo - always from cli, otherwise depends on echoInBrowser property
-     * - die or redirect if necessary
+    /**
+     * this function must be called by each registered handler prior to calling handle()
+     * sets isSendEmail true iff
+     * - emailer is set
+     * - webmaster email is set
+     * - email log file is readable and writable
+     * - less than MAX_EMAIL_PER_HOUR entries are in the log in the past hour
+     * truncates file and writes back only the last (up to MAX_EMAIL_PER_HOUR - 1) entries, plus an entry for current time, for a total of MAX_EMAIL_PER_HOUR or less
      */
-    private function handle(string $messageBody, bool $die = false)
+    private function setIsSendEmail(string $errorMessageBody)
     {
-        // happens when an expression is prefixed with @ (meaning: ignore errors).
-        if (error_reporting() == 0) {
-            return;
-        }
-
-        $errorMessage = self::generateMessage($messageBody);
-
-        /** log to file */
-        self::logError($errorMessage, false, $this->echoInBrowser);
-
-        /**
-         *  echo
-         *  die / redirect
-         */
-        if (PHP_SAPI == 'cli') {
-            echo $errorMessage;
-            if ($die) {
-                echo "\n";
-                die("FATAL");
-            }
-        } else {
-            if ($this->echoInBrowser) {
-                echo nl2br($errorMessage, false);
-                $dieMessage = '';
+        if ($this->emailer != null && $this->webmasterEmail != null && $this->emailLogPath != null && !strstr($errorMessageBody, $this->emailFailMessage)) {
+            if (!$this->emailLogHandle = fopen($this->emailLogPath, "r+")) {
+                $this->isSendEmail = false;
+                $this->isEmailLogFileOpenError = true;
+                return;
             } else {
-                $dieMessage = $this->fatalHtml;
-            }
-            if ($die) {
-                /** do not redirect if the redirect page is the current page with error */
-                if ($this->fatalRedirectPage != null && (!isset($_SERVER['REQUEST_URI']) || !strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI'])) ) {
-                    if (!(isset($_SERVER['REQUEST_URI']) && strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI']))) {
-                        header("Location: $this->fatalRedirectPage");
-                        exit();
+                $lessThanAnHourAgoCount = 0;
+                $linesToWrite = [];
+                while(!feof($this->emailLogHandle)){
+                    if ($line = fgets($this->emailLogHandle)) {
+                        $lineDtString = substr($line, 0, mb_strlen($line) - mb_strlen(PHP_EOL));
+                        $lineDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $lineDtString);
+                        $oneHourAgo = date(self::getDateTimeFormat(), strtotime('-1 hour'));
+                        $oneHourAgoDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $oneHourAgo);
+                        if ($lineDt > $oneHourAgoDt) {
+                            /** less than an hour ago */
+                            $lessThanAnHourAgoCount++;
+                            if ($lessThanAnHourAgoCount >= self::MAX_EMAIL_PER_HOUR) {
+                                $this->isSendEmail = false;
+                                break;
+                            } else {
+                                $linesToWrite[] = $line;
+                            }
+                        }
                     }
                 }
-                die($dieMessage);
+                array_unshift($linesToWrite, self::getTimestamp() . PHP_EOL);
+                ftruncate($this->emailLogHandle, 0);
+                rewind($this->emailLogHandle);
+                if (fwrite($this->emailLogHandle, implode($linesToWrite)) === false) {
+                    $this->isEmailLogFileWriteError = true;
+                    $this->isSendEmail = false;
+                    return;
+                }
+                fclose($this->emailLogHandle);
             }
+            $this->isSendEmail = true;
+            return;
         }
+        $this->isSendEmail = false;
+    }
+
+    private static function getDateTimeFormat(): string 
+    {
+        return 'd-M-Y H:i:s e';
+    }
+
+    private static function getTimestamp(): string 
+    {
+        return date(self::getDateTimeFormat(), $_SERVER["REQUEST_TIME"]);
     }
 
     private static function generateMessage(string $messageBody): string
     {
-        $message = "[" . date('d-M-Y H:i:s e', $_SERVER["REQUEST_TIME"]) . "] ";
+        $message = "[" . self::getTimestamp() . "] ";
         if (PHP_SAPI == 'cli') {
             global $argv;
             $message .= "Command line: " . $argv[0];
         } else {
             /** note $_SERVER['REQUEST_URI'] includes the query string */
-            $message .= "Web Page: " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'];
+            $message .= $_SERVER['HTTP_HOST'] . " " . $_SERVER['REQUEST_METHOD'] . " " . $_SERVER['REQUEST_URI'];
         }
-        $message .= $messageBody . PHP_EOL . PHP_EOL;
+        $message .= PHP_EOL . $messageBody . PHP_EOL . PHP_EOL;
         return $message;
     }
 
