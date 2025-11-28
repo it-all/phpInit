@@ -162,5 +162,3 @@ set_exception_handler(array($throwableHandler, 'onException'));
  * see answer in https://stackoverflow.com/questions/1053424/how-do-i-get-php-errors-to-display
  */
 register_shutdown_function(array($throwableHandler, 'onShutdown'));
-
-trigger_error('test');
