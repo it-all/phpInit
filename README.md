@@ -21,7 +21,7 @@ git merge
 ```
 
 ## Why Page Controller?  
-Small and medium sized web apps may not need the overhead of Front Controlled [frameworks](https://toys.lerdorf.com/the-no-framework-php-mvc-framework). Request routing in frameworks adds a layer of abstraction and complexity that can be eliminated by a simple Page Controller model, with only 1 required file at the top of each page to provide configuration and access to commonly used features.  
+Small and medium sized web apps may not need the overhead of front controlled [frameworks](https://toys.lerdorf.com/the-no-framework-php-mvc-framework). Request routing in front controllers adds a layer of abstraction and complexity that can be eliminated by a simple page controller model, with only 1 required file at the top of each page to provide configuration and access to commonly used features.  
 
 ## Custom Error Handler  
 Handles as many PHP errors and uncaught exceptions as possible. Provides a stack trace to help debug.  
@@ -40,4 +40,4 @@ Handles as many PHP errors and uncaught exceptions as possible. Provides a stack
 Set appropriate .env vars to instantiate a helpful service layer object called $emailer. Then access with $emailer->getPhpMailer() or just email using $emailer->send().  
 
 ## PostGreSQL Database  
-Set the connection string var in .env to instantiate a helpful service layer object called $postgres, which includes a Query Builder. Use that to run queries, or the connection constant PG_CONN to build your own with native PHP functions.  
+Set the connection string var in .env to instantiate a helpful service layer object called $postgres, which includes a Query Builder. Use that to run queries, or the connection constant PG_CONN to query using native PHP pg functions.  
