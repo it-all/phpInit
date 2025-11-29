@@ -21,7 +21,7 @@ git merge
 ```
 
 ## Why Page Controller?  
-Small and medium sized web apps may not need the overhead of Front Controlled frameworks(https://toys.lerdorf.com/the-no-framework-php-mvc-framework). Request routing in frameworks adds a layer of abstraction and complexity that can be eliminated by a simple Page Controller model, with only 1 required file at the top of each page, providing configuration and access to commonly used features.  
+Small and medium sized web apps may not need the overhead of Front Controlled [frameworks](https://toys.lerdorf.com/the-no-framework-php-mvc-framework). Request routing in frameworks adds a layer of abstraction and complexity that can be eliminated by a simple Page Controller model, with only 1 required file at the top of each page to provide configuration and access to commonly used features.  
 
 ## Custom Error Handler  
 Handles as many PHP errors and uncaught exceptions as possible. Provides a stack trace to help debug.  
