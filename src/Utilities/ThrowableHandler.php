@@ -191,54 +191,60 @@ class ThrowableHandler
     /**
      * this function must be called by each registered handler prior to calling handle()
      * sets isSendEmail true iff
-     * - emailer is set
-     * - webmaster email is set
-     * - email log file is readable and writable
+     * - emailer is set and
+     * - webmaster email is set and
+     * - this is not an email failure error
+     * - email log file is readable and writable and
      * - less than MAX_EMAIL_PER_HOUR entries are in the log in the past hour
-     * truncates file and writes back only the last (up to MAX_EMAIL_PER_HOUR - 1) entries, plus an entry for current time, for a total of MAX_EMAIL_PER_HOUR or less
+     * only writes to the log when sending an email, not when it's already full.
+     * truncates file and writes back only the last (up to MAX_EMAIL_PER_HOUR - 1) entries, plus an entry for current time if sending an email, for a total of MAX_EMAIL_PER_HOUR or less
+     * so once the log file "fills up" with MAX_EMAIL_PER_HOUR entries, no emails will be sent until an hour passes from first entry
      */
     private function setIsSendEmail(string $errorMessageBody)
     {
-        if ($this->emailer != null && $this->webmasterEmail != null && $this->emailLogPath != null && !strstr($errorMessageBody, $this->emailFailMessage)) {
-            if (!$this->emailLogHandle = fopen($this->emailLogPath, "r+")) {
-                $this->isSendEmail = false;
-                $this->isEmailLogFileOpenError = true;
-                return;
-            } else {
-                $lessThanAnHourAgoCount = 0;
-                $linesToWrite = [];
-                while(!feof($this->emailLogHandle)){
-                    if ($line = fgets($this->emailLogHandle)) {
-                        $lineDtString = substr($line, 0, mb_strlen($line) - mb_strlen(PHP_EOL));
-                        $lineDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $lineDtString);
-                        $oneHourAgo = date(self::getDateTimeFormat(), strtotime('-1 hour'));
-                        $oneHourAgoDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $oneHourAgo);
-                        if ($lineDt > $oneHourAgoDt) {
-                            /** less than an hour ago */
-                            $lessThanAnHourAgoCount++;
-                            if ($lessThanAnHourAgoCount >= self::MAX_EMAIL_PER_HOUR) {
-                                $this->isSendEmail = false;
-                                break;
-                            } else {
-                                $linesToWrite[] = $line;
-                            }
-                        }
-                    }
-                }
-                array_unshift($linesToWrite, self::getTimestamp() . PHP_EOL);
-                ftruncate($this->emailLogHandle, 0);
-                rewind($this->emailLogHandle);
-                if (fwrite($this->emailLogHandle, implode($linesToWrite)) === false) {
-                    $this->isEmailLogFileWriteError = true;
-                    $this->isSendEmail = false;
-                    return;
-                }
-                fclose($this->emailLogHandle);
-            }
-            $this->isSendEmail = true;
+        if ($this->emailer === null || $this->webmasterEmail == null || $this->emailLogPath == null || strstr($errorMessageBody, $this->emailFailMessage)) {
+            $this->isSendEmail = false;
             return;
         }
-        $this->isSendEmail = false;
+
+        if (!$this->emailLogHandle = fopen($this->emailLogPath, "r+")) {
+            $this->isSendEmail = false;
+            $this->isEmailLogFileOpenError = true;
+            return;
+        }
+
+        /** assume true, set false if #$logLinesPastHour >= MAX_EMAIL_PER_HOUR */
+        $this->isSendEmail = true; 
+
+        $logLinesPastHour = [];
+        while (!feof($this->emailLogHandle)) {
+            if ($line = fgets($this->emailLogHandle)) {
+                $lineDtString = substr($line, 0, mb_strlen($line) - mb_strlen(PHP_EOL));
+                $lineDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $lineDtString);
+                $oneHourAgo = date(self::getDateTimeFormat(), strtotime('-1 hour'));
+                $oneHourAgoDt = DateTimeImmutable::createFromFormat(self::getDateTimeFormat(), $oneHourAgo);
+                if ($lineDt > $oneHourAgoDt) {
+                    /** less than an hour ago */
+                    $logLinesPastHour[] = $line;
+                    if (count($logLinesPastHour) >= self::MAX_EMAIL_PER_HOUR) {
+                        $this->isSendEmail = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ($this->isSendEmail) {
+            $currentLogLine = self::getTimestamp() . PHP_EOL;
+            $logLinesToWrite = array_merge([$currentLogLine], $logLinesPastHour);
+            ftruncate($this->emailLogHandle, 0);
+            rewind($this->emailLogHandle);
+            if (fwrite($this->emailLogHandle, implode($logLinesToWrite)) === false) {
+                $this->isEmailLogFileWriteError = true;
+                $this->isSendEmail = false;
+            }
+        }
+        fclose($this->emailLogHandle);
     }
 
     private static function getDateTimeFormat(): string 

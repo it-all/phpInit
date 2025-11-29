@@ -2,7 +2,7 @@
 Initialize a PHP page controller app with autoload, important PHP settings, a custom error handler, and PHPMailer access.  
 
 ## Installation & Usage  
-Clone this repo  
+Clone this repo.  
 Install the Composer dependencies:  
 ```
 php composer.phar update
