@@ -7,8 +7,9 @@
  */
 declare(strict_types=1);
 use Dotenv\Dotenv;
-use Utilities\PHPMailerService;
-use Utilities\ThrowableHandler;
+use Infrastructure\Database\Postgres;
+use Infrastructure\Utilities\PHPMailerService;
+use Infrastructure\Utilities\ThrowableHandler;
 
 /** all, including future types */
 error_reporting(-1); 
@@ -63,6 +64,7 @@ $dotenv->ifPresent('IS_ECHO_ERRORS_DEV')->isBoolean();
 $dotenv->ifPresent('MAX_ERROR_LOG_CHARACTERS')->isInteger();
 $dotenv->ifPresent('ERROR_PAGE')->notEmpty();
 $dotenv->ifPresent('FATAL_ERROR_HTML')->notEmpty();
+$dotenv->ifPresent('POSTGRES_CONNECTION_STRING')->notEmpty();
 
 /** overwrites .env bools with a PHP boolean value */
 (function($dotenvBools) {
@@ -162,3 +164,9 @@ set_exception_handler(array($throwableHandler, 'onException'));
  * see answer in https://stackoverflow.com/questions/1053424/how-do-i-get-php-errors-to-display
  */
 register_shutdown_function(array($throwableHandler, 'onShutdown'));
+
+/** connect to PostgreSQL */
+if (isset($_ENV['POSTGRES_CONNECTION_STRING'])) {
+    $postgres = Postgres::getInstance($_ENV['POSTGRES_CONNECTION_STRING']);
+    define('PG_CONN', $postgres->getConnection());
+}

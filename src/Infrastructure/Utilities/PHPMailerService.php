@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Utilities;
+namespace Infrastructure\Utilities;
 
 use Exception;
 use PHPMailer\PHPMailer\PHPMailer;

@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Utilities;
+namespace Infrastructure\Utilities;
 
 use DateTimeImmutable;
-use Utilities\PHPMailerService;
+use Infrastructure\Utilities\PHPMailerService;
 
 class ThrowableHandler
 {

@@ -1,5 +1,5 @@
 # phpInit  
-Initialize a PHP page controller app with autoload, important PHP settings, a custom error handler, and PHPMailer access.  
+Initialize a PHP page controller app with autoload, important PHP settings, a custom error handler, optional PHPMailer access, optional PostGreSQL database connection (PHP pgsql extension required).  
 
 ## Installation & Usage  
 Clone this repo.  
@@ -21,7 +21,7 @@ git merge
 ```
 
 ## Why Page Controller?  
-Why Front Controller? [Why framework?](https://toys.lerdorf.com/the-no-framework-php-mvc-framework) Not all apps need all that. Minimal overhead, maximum performance and flexibility.  
+Small and medium sized web apps may not need the overhead of Front Controlled frameworks(https://toys.lerdorf.com/the-no-framework-php-mvc-framework). Request routing in frameworks adds a layer of abstraction and complexity that can be eliminated by a simple Page Controller model, with only 1 required file at the top of each page, providing configuration and access to commonly used features.  
 
 ## Custom Error Handler  
 Handles as many PHP errors and uncaught exceptions as possible. Provides a stack trace to help debug.  
@@ -37,4 +37,7 @@ Handles as many PHP errors and uncaught exceptions as possible. Provides a stack
 - Only emails if less than 10 emails have been sent in the past hour (otherwise emails on every page load can cause server slowdown).  
 
 ## PHPMailer  
-Set appropriate .env vars to instantiate. Then access with $emailer->getPhpMailer() or just email using $emailer->send().  
+Set appropriate .env vars to instantiate a helpful service layer object called $emailer. Then access with $emailer->getPhpMailer() or just email using $emailer->send().  
+
+## PostGreSQL Database  
+Set the connection string var in .env to instantiate a helpful service layer object called $postgres, which includes a Query Builder. Use that to run queries, or the connection constant PG_CONN to build your own with native PHP functions.  
