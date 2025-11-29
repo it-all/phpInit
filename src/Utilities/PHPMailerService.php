@@ -43,6 +43,11 @@ class PHPMailerService
         $this->phpMailer = $this->create();
     }
 
+    public function getPhpMailer(): PHPMailer
+    {
+        return $this->phpMailer;
+    }
+
     /**
      * calls the PHPMailer send function
      * email addresses should be validated before calling
