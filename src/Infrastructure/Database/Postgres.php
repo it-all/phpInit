@@ -6,10 +6,9 @@ namespace Pageflow\Infrastructure\Database;
 use Pageflow\Infrastructure\Database\Query\QueryBuilder;
 
 /**
- * Class Postgres
  * A class for connecting to a postgresql database and a few useful meta-query methods
  */
-final class Postgres
+final class PostgresService
 {
     /** @var array http://www.postgresql.org/docs/9.4/static/datatype-numeric.html */
     const NUMERIC_TYPES = array('smallint', 'integer', 'bigint', 'decimal', 'numeric', 'real', 'double precision', 'smallserial', 'serial', 'bigserial');
@@ -53,7 +52,7 @@ final class Postgres
     {
         static $instance = null;
         if ($instance === null) {
-            $instance = new Postgres($connectionString);
+            $instance = new PostgresService($connectionString);
         }
         return $instance;
     }

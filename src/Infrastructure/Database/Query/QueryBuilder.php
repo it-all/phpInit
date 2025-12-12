@@ -4,7 +4,8 @@ declare(strict_types=1);
 namespace Pageflow\Infrastructure\Database\Query;
 
 use Exception;
-use Pageflow\Infrastructure\Database\Postgres;
+use Pageflow\Infrastructure\Database\PostgresService;
+
 use Pageflow\Infrastructure\Exceptions\QueryFailureException;
 use Pageflow\Infrastructure\Exceptions\QueryResultsNotFoundException;
 

@@ -5,7 +5,8 @@ namespace Pageflow;
 
 use Dotenv\Dotenv;
 use Exception;
-use Pageflow\Infrastructure\Database\Postgres;
+use Pageflow\Infrastructure\Database\PostgresService;
+
 use Pageflow\Infrastructure\Utilities\PHPMailerService;
 use Pageflow\Infrastructure\Utilities\ThrowableHandler;
 
@@ -36,6 +37,11 @@ class Pageflow
 
     const EMAIL_FAIL_MESSAGE_START = 'Email Send Failure';
 
+    private $rootDir;
+    private $emailer;
+    private $postgres;
+    private $pgConn;
+
     public static function getInstance()
     {
         static $instance = null;
@@ -45,8 +51,10 @@ class Pageflow
         return $instance;
     }
 
-    public function init()
+    public function init(?string $rootDir = null)
     {
+        $this->rootDir = $rootDir ?? __DIR__ . '/../../../../';
+
         /** all, including future types */
         error_reporting(-1); 
 
@@ -59,7 +67,7 @@ class Pageflow
         /** ENV AND CONFIG */
 
         /** parse .env */
-        $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+        $dotenv = Dotenv::createImmutable($this->rootDir);
         $dotenv->load();
         $dotenv->required('IS_LIVE')->isBoolean();
         $dotenv->required(['PHP_ERROR_LOG_PATH'])->notEmpty();
@@ -171,9 +179,29 @@ class Pageflow
 
         /** connect to PostgreSQL */
         if (isset($_ENV['POSTGRES_CONNECTION_STRING'])) {
-            $postgres = Postgres::getInstance($_ENV['POSTGRES_CONNECTION_STRING']);
-            define('PG_CONN', $postgres->getConnection());
+            $this->postgres = PostgresService::getInstance($_ENV['POSTGRES_CONNECTION_STRING']);
+            $this->pgConn = $this->postgres->getConnection();
         }
+    }
+
+    public function getRootDir(): ?string
+    {
+        return $this->rootDir;
+    }
+
+    public function getEmailer(): ?PHPMailerService
+    {
+        return $this->emailer;
+    }
+
+    public function getPostgres(): ?PostgresService
+    {
+        return $this->postgres;
+    }
+
+    public function getPgConn()
+    {
+        return $this->pgConn;
     }
 }
 
