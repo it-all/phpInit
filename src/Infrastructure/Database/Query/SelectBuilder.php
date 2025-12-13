@@ -34,6 +34,8 @@ class SelectBuilder extends QueryBuilder
 
     private function addWhereExtraClause(string $clause)
     {
+        // SECURITY REVIEW: `$clause` is appended raw and cannot use parameters.
+        // Only accept server-side generated, trusted SQL fragments. Do not pass user input here.
         $start = $this->whereStarted ? " AND " : " WHERE ";
         $this->add($start . $clause);
     }
@@ -74,6 +76,8 @@ class SelectBuilder extends QueryBuilder
 
     private function addWhereColumn(string $columnNameSql, string $whereOperator, $whereValue)
     {
+        // SECURITY REVIEW: Validate `$columnNameSql` against an allowlist of column names.
+        // `$columnNameSql` is directly concatenated as an identifier.
         $whereOperator = strtoupper($whereOperator);
         $sql = $this->whereStarted ? " AND " : " WHERE ";
         $sql .= "$columnNameSql $whereOperator ";

@@ -74,7 +74,9 @@ class QueryBuilder
     {
         foreach ($this->args as $argIndex => $arg) {
             if (is_bool($arg)) {
-                $this->args[$argIndex] = Postgres::convertBoolToPostgresBool($arg);
+                // SECURITY REVIEW: Typo? Referenced class appears to be `PostgresService` in this project.
+                // Using the wrong converter could cause runtime errors. Verify intended class.
+                $this->args[$argIndex] = PostgresService::convertBoolToPostgresBool($arg);
             }
         }
     }
@@ -89,6 +91,7 @@ class QueryBuilder
         }
         
         /** query failures within transactions without suppressing errors for pg_query_params caused two errors, only 1 of which was inserted to the database log */
+        // SECURITY REVIEW: `PG_CONN` must be a defined, trusted resource. Ensure it is set centrally and not overrideable by user input.
         if (!$result = pg_query_params(PG_CONN, $this->sql, $this->args)) {
             /** note pg_last_error seems to often not return anything, but pg_query_params call will result in php warning */
             $msg = pg_last_error(PG_CONN) . " " . $this->sql;

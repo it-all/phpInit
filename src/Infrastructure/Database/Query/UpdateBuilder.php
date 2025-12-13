@@ -22,6 +22,8 @@ class UpdateBuilder extends InsertUpdateBuilder {
      */
     public function addColumn(string $name, $value)
     {
+        // SECURITY REVIEW: Validate `$name` against expected column names.
+        // It is concatenated directly, which may allow SQL injection through identifiers if not trusted.
         $this->args[] = $value;
         if (count($this->args) > 1) {
             $this->setColumnsValues .= ", ";
@@ -45,6 +47,7 @@ class UpdateBuilder extends InsertUpdateBuilder {
      */
     public function setSql()
     {
+        // SECURITY REVIEW: Validate `$this->dbTable` and `$this->updateOnColumnName` (identifiers).
         $this->args[] = $this->updateOnColumnValue;
         $lastArgNum = count($this->args);
         $this->sql = "UPDATE $this->dbTable SET $this->setColumnsValues WHERE $this->updateOnColumnName = $".$lastArgNum;

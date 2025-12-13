@@ -70,8 +70,11 @@ final class PostgresService
     {
         $query = "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema = $1";
         foreach ($skipTables as $skip) {
+            // SECURITY REVIEW: `$skip` is interpolated directly. If `$skipTables` derives from user input,
+            // this opens risk of SQL injection. Consider using additional parameters and building dynamic
+            // conditions safely (e.g., validating against an allowlist or constructing parameterized NOT LIKE/!= clauses).
             $query .= " AND table_name";
-            $query .= (substr($skip, mb_strlen($skip) - 1) === '%') ? " NOT LIKE '$skip'" : " != '$skip'";
+            $query .= (substr($skip, mb_strlen($skip) - 1) === '%') ? " NOT LIKE '".$skip."'" : " != '".$skip."'";
         }
         $query .= " ORDER BY table_name";
         $q = new QueryBuilder($query, $schema);
@@ -94,6 +97,8 @@ final class PostgresService
      */
     public function doesTableExist(string $tableName, string $schema = 'public'): bool
     {
+        // SECURITY REVIEW: `table_name` and `table_schema` are safely parameterized via $1 and $2.
+        // Ensure callers validate `tableName`/`schema` against expected identifiers to avoid typos or unauthorized tables.
         $q = new QueryBuilder("SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_type = 'BASE TABLE' AND table_schema = $2", $tableName, $schema);
 
         if (pg_num_rows($q->execute()) == 0) {
@@ -105,6 +110,7 @@ final class PostgresService
     /** note: NOT enough info given by pg_meta_data($tableName); */
     public static function getTableMetaData(string $tableName)
     {
+        // SECURITY REVIEW: `table_name = $1` is parameterized; safe for values.
         $q = new QueryBuilder("SELECT column_name, data_type, column_default, is_nullable, character_maximum_length, numeric_precision, udt_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = $1", $tableName);
 
         $rs = $q->execute();
