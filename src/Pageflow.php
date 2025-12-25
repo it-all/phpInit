@@ -36,6 +36,8 @@ class Pageflow
     const FATAL_ERROR_HTML_DEFAULT = '<br>Our apologies, an error has occurred. We will fix the problem asap.<br>';
 
     const EMAIL_FAIL_MESSAGE_START = 'Email Send Failure';
+    const SESSION_KEY_LAST_ACTIVITY = 'LAST_ACTIVITY';
+    const SESSION_KEY_CREATED = 'CREATED';
 
     private $rootDir;
     private $dotEnv;
@@ -73,10 +75,11 @@ class Pageflow
         $dotenv->required(['IS_LIVE', 'IS_EMAIL_ERRORS'])->isBoolean();
         $dotenv->required('PHP_ERROR_LOG_PATH')->notEmpty();
         $dotenv->ifPresent('IS_ECHO_ERRORS_DEV')->isBoolean();
-        $dotenv->ifPresent('MAX_ERROR_LOG_CHARACTERS')->isInteger();
+        $dotenv->ifPresent(['MAX_ERROR_LOG_CHARACTERS', 'SESSION_TTL_MINUTES'])->isInteger();
         $dotenv->ifPresent(['ERROR_PAGE', 
             'FATAL_ERROR_HTML', 
-            'POSTGRES_CONNECTION_STRING'
+            'POSTGRES_CONNECTION_STRING',
+            'SESSION_SAVE_PATH'
         ])->notEmpty();
 
         $this->convertDotEnvBoolValues(self::DOTENV_BOOLS);
@@ -119,6 +122,9 @@ class Pageflow
             $webmasterEmail = null;
             $emailer = null;
         }
+
+        $this->dotEnv = $dotenv;
+        $this->emailer = $emailer;
 
         /** set variables for env vars with defaults */
         $isEchoErrorsDev = $_ENV['IS_ECHO_ERRORS_DEV'] ?? self::IS_ECHO_ERRORS_DEV_DEFAULT;
@@ -174,13 +180,83 @@ class Pageflow
             $this->pgConn = $this->postgres->getConnection();
         }
 
-        $this->dotEnv = $dotenv;
-        $this->emailer = $emailer;
+
+        /** SESSION 
+         * see 
+         * https://www.php.net/manual/en/session.security.ini.php
+         * https://stackoverflow.com/questions/520237/how-do-i-expire-a-php-session-after-30-minutes
+         * https://stackoverflow.com/questions/10165424/how-secure-are-php-sessions
+         */
+        if (isset($_ENV['SESSION_TTL_MINUTES']) && php_sapi_name() !== 'cli' && session_status() !== PHP_SESSION_ACTIVE) {
+
+            /** important security settings */
+            ini_set('session.use_strict_mode', 1);
+            ini_set('session.use_only_cookies', 1);
+            ini_set('session.use_cookies', 1);
+            ini_set('session.cookie_httponly', 1);
+            ini_set('session.cookie_secure', 1);
+            ini_set('session.use_trans_sid', 0);
+            ini_set('session.cache_limiter', 'nocache');
+
+            $hashAlgos = hash_algos();
+            $hashAlgoPriorities = ['whirlpool', 'sha512', 'sha256', 'sha1'];
+            foreach ($hashAlgoPriorities as $hashAlgoPriority) {
+                if (in_array($hashAlgoPriority, $hashAlgos)) {
+                    $useHashAlgo = $hashAlgoPriority;
+                    break;
+                }
+            }
+            if (isset($useHashAlgo)) {
+                ini_set('session.hash_function', $useHashAlgo);
+            }
+
+            if (isset($_ENV['SESSION_SAVE_PATH'])) {
+                ini_set('session.save_path', $_ENV['SESSION_SAVE_PATH']);
+            }
+
+            /** PHP 7.3+ */
+            ini_set('session.cookie_samesite', 'Strict');
+
+            $sessionTtlSeconds = (int) $_ENV['SESSION_TTL_MINUTES'] * 60;
+            ini_set('session.gc_maxlifetime', (string) $sessionTtlSeconds);
+            ini_set('session.cookie_lifetime', (string) $sessionTtlSeconds);
+            session_start();
+
+            if (isset($_SESSION[self::SESSION_KEY_LAST_ACTIVITY]) && (time() - $_SESSION[self::SESSION_KEY_LAST_ACTIVITY] > $sessionTtlSeconds)) {
+                /** last request was more than $sessionTtlSeconds ago */
+                session_unset();     // unset $_SESSION variable for the run-time 
+                session_destroy();   // destroy session data in storage
+                session_start();
+            }
+            /** update last activity time stamp */
+            $_SESSION[self::SESSION_KEY_LAST_ACTIVITY] = time();
+
+            if (!isset($_SESSION[self::SESSION_KEY_CREATED])) {
+                $_SESSION[self::SESSION_KEY_CREATED] = time();
+            } else if (time() - $_SESSION[self::SESSION_KEY_CREATED] > $sessionTtlSeconds) {
+                /** session started more than $sessionTtlSeconds ago */
+                session_regenerate_id(true);    // change session ID for the current session and invalidate old session ID
+                $_SESSION[self::SESSION_KEY_CREATED] = time();  // update creation time
+            }
+
+        }
+    }
+
+    public function isSessionStarted(): bool
+    {
+        if (php_sapi_name() !== 'cli') {
+            if (version_compare(phpversion(), '5.4.0', '>=')) {
+                return session_status() === PHP_SESSION_ACTIVE ? TRUE : FALSE;
+            } else {
+                return session_id() === '' ? FALSE : TRUE;
+            }
+        }
+        return false;
     }
 
     /**
-     * overwrites specified .env bools with a PHP boolean value
-     */
+                 * overwrites specified .env bools with a PHP boolean value
+                 */
     public function convertDotEnvBoolValues(array $dotEnvBoolVarnames)
     {
         foreach ($dotEnvBoolVarnames as $dotEnvBoolVarname) {
