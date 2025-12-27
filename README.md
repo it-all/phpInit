@@ -17,10 +17,12 @@ Add the following code to the top of your php file(s):
 ```
 use Pageflow\Pageflow;
 
-require __DIR__ . '/../vendor/autoload.php';
+define('ROOT_DIR',  dirname(__DIR__));
+define('VENDOR_DIR', ROOT_DIR . '/vendor');
+require VENDOR_DIR . '/autoload.php';
 
 $pageflow = Pageflow::getInstance();
-$pageflow->init();
+$pageflow->init(ROOT_DIR);
 ```
 Or create an init.php file with the code above and require it at the top of your php file(s).  
 
@@ -53,6 +55,12 @@ then:
 ```
 $emailer->send('Subject', 'Body', ['self@example.com']);
 ```
+
+## PHP-Auth
+Follow the [database table creation instructions](https://github.com/delight-im/PHP-Auth) to enable. Requires PDO.  
+
+## PDO
+Set the connection string var in .env to connect to a database using PDO. Note that this is required for Auth.  
 
 ## PostgreSQL Database  
 Set the connection string var in .env to instantiate a helpful service layer object, which includes a Query Builder. Use that to run queries, or the connection resource to query using native PHP pg functions.  

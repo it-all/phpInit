@@ -7,6 +7,7 @@ use Pageflow\Infrastructure\Utilities\PHPMailerService;
 
 class ThrowableHandler
 {
+    private $rootDir;
     private static $logFilePath;
     private static $maxErrorLogChars;
     private $echoInBrowser;
@@ -35,8 +36,9 @@ class ThrowableHandler
      * if not null, fatal message will be echoed upon fatal errors which do not redirect
      * email is not sent from command line
      */
-    public function __construct(string $logFilePath, int $maxErrorLogChars, ?bool $echoInBrowser = false, ?string $fatalRedirectPage = null, ?string $fatalHtml = null, ?PHPMailerService $emailer = null, ?string $webmasterEmail = null, ?string $emailFailMessage = null, ?string $emailLogPath = null)
+    public function __construct(string $rootDir, string $logFilePath, int $maxErrorLogChars, ?bool $echoInBrowser = false, ?string $fatalRedirectPage = null, ?string $fatalHtml = null, ?PHPMailerService $emailer = null, ?string $webmasterEmail = null, ?string $emailFailMessage = null, ?string $emailLogPath = null)
     {
+        $this->rootDir = $rootDir;
         self::$logFilePath = $logFilePath;
         self::$maxErrorLogChars = $maxErrorLogChars;
         $this->echoInBrowser = $echoInBrowser;
@@ -67,6 +69,15 @@ class ThrowableHandler
          */
         if (!(error_reporting() & $errno)) {
             return false;
+        }
+
+        if ($errno & (E_DEPRECATED | E_USER_DEPRECATED)) {
+
+            /** if the error is a warning from third-party vendor */
+            if (strpos(str_replace('\\', '/', $errfile), str_replace('\\', '/', ($this->rootDir . '/vendor/'))) === 0) {
+                /** suppress the error */
+                return true;
+            }
         }
 
         $message = $this->generateMessageBody($errno, $errstr, $errfile, $errline) . PHP_EOL . "Stack Trace:". PHP_EOL . $this->getDebugBacktraceString();

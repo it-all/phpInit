@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace Pageflow;
 
+use Delight\Auth\Auth;
 use Dotenv\Dotenv;
 use Exception;
 use Pageflow\Infrastructure\Database\PostgresService;
 
 use Pageflow\Infrastructure\Utilities\PHPMailerService;
 use Pageflow\Infrastructure\Utilities\ThrowableHandler;
+use PDO;
 
 /** 
  * a Singleton.
@@ -45,6 +47,9 @@ class Pageflow
     private $postgres;
     private $pgConn;
 
+    private $pdo;
+    private $auth;
+
     public static function getInstance()
     {
         static $instance = null;
@@ -79,6 +84,7 @@ class Pageflow
         $dotenv->ifPresent(['ERROR_PAGE', 
             'FATAL_ERROR_HTML', 
             'POSTGRES_CONNECTION_STRING',
+            'PDO_CONNECTION_STRING',
             'SESSION_SAVE_PATH'
         ])->notEmpty();
 
@@ -133,12 +139,6 @@ class Pageflow
 
         /** error handling */
 
-        /** 
-         * ignore_repeated_errors only stops the same error from being logged in case it happens more than once in a row, on the same page load
-         * see https://github.com/php/php-src/issues/19509
-         */
-        ini_set('ignore_repeated_errors', 'On');
-
         ini_set('error_log', $_ENV['PHP_ERROR_LOG_PATH']);
 
         if (isset($_ENV['TIME_ZONE']) && mb_strlen($_ENV['TIME_ZONE']) > 0) {
@@ -160,7 +160,7 @@ class Pageflow
         /** do not redirect to error page on test servers */
         $fatalRedirectPage = ($_ENV['IS_LIVE'] && isset($_ENV['ERROR_PAGE'])) ? $_ENV['ERROR_PAGE'] : null;
 
-        $throwableHandler = new ThrowableHandler($_ENV['PHP_ERROR_LOG_PATH'], $maxErrorLogCharacters, $echoErrorsInBrowser, $fatalRedirectPage, $fatalErrorHtml, $emailer, $webmasterEmail, self::EMAIL_FAIL_MESSAGE_START, $errorEmailLogPath);
+        $throwableHandler = new ThrowableHandler($this->rootDir, $_ENV['PHP_ERROR_LOG_PATH'], $maxErrorLogCharacters, $echoErrorsInBrowser, $fatalRedirectPage, $fatalErrorHtml, $emailer, $webmasterEmail, self::EMAIL_FAIL_MESSAGE_START, $errorEmailLogPath);
 
         set_error_handler(array($throwableHandler, 'onError'));
         set_exception_handler(array($throwableHandler, 'onException'));
@@ -173,13 +173,6 @@ class Pageflow
          * see answer in https://stackoverflow.com/questions/1053424/how-do-i-get-php-errors-to-display
          */
         register_shutdown_function(array($throwableHandler, 'onShutdown'));
-
-        /** connect to PostgreSQL */
-        if (isset($_ENV['POSTGRES_CONNECTION_STRING'])) {
-            $this->postgres = PostgresService::getInstance($_ENV['POSTGRES_CONNECTION_STRING']);
-            $this->pgConn = $this->postgres->getConnection();
-        }
-
 
         /** SESSION 
          * see 
@@ -224,8 +217,8 @@ class Pageflow
 
             if (isset($_SESSION[self::SESSION_KEY_LAST_ACTIVITY]) && (time() - $_SESSION[self::SESSION_KEY_LAST_ACTIVITY] > $sessionTtlSeconds)) {
                 /** last request was more than $sessionTtlSeconds ago */
-                session_unset();     // unset $_SESSION variable for the run-time 
-                session_destroy();   // destroy session data in storage
+                session_unset();
+                session_destroy();
                 session_start();
             }
             /** update last activity time stamp */
@@ -233,30 +226,31 @@ class Pageflow
 
             if (!isset($_SESSION[self::SESSION_KEY_CREATED])) {
                 $_SESSION[self::SESSION_KEY_CREATED] = time();
-            } else if (time() - $_SESSION[self::SESSION_KEY_CREATED] > $sessionTtlSeconds) {
+            } elseif (time() - $_SESSION[self::SESSION_KEY_CREATED] > $sessionTtlSeconds) {
                 /** session started more than $sessionTtlSeconds ago */
                 session_regenerate_id(true);    // change session ID for the current session and invalidate old session ID
                 $_SESSION[self::SESSION_KEY_CREATED] = time();  // update creation time
             }
-
         }
-    }
 
-    public function isSessionStarted(): bool
-    {
-        if (php_sapi_name() !== 'cli') {
-            if (version_compare(phpversion(), '5.4.0', '>=')) {
-                return session_status() === PHP_SESSION_ACTIVE ? TRUE : FALSE;
-            } else {
-                return session_id() === '' ? FALSE : TRUE;
-            }
+        /** connect to PostgreSQL */
+        if (isset($_ENV['POSTGRES_CONNECTION_STRING'])) {
+            $this->postgres = PostgresService::getInstance($_ENV['POSTGRES_CONNECTION_STRING']);
+            $this->pgConn = $this->postgres->getConnection();
         }
-        return false;
+
+        if (isset($_ENV['PDO_CONNECTION_STRING'])) {
+            $this->pdo = new PDO($_ENV['PDO_CONNECTION_STRING']);
+            $this->auth = new \Delight\Auth\Auth($this->pdo);
+        } else {
+            $this->pdo = null;
+            $this->auth = null;
+        }
     }
 
     /**
-                 * overwrites specified .env bools with a PHP boolean value
-                 */
+     * overwrites specified .env bools with a PHP boolean value
+     */
     public function convertDotEnvBoolValues(array $dotEnvBoolVarnames)
     {
         foreach ($dotEnvBoolVarnames as $dotEnvBoolVarname) {
@@ -292,5 +286,15 @@ class Pageflow
     public function getPgConn()
     {
         return $this->pgConn;
+    }
+
+    public function getPdo(): ?PDO
+    {
+        return $this->pdo;
+    }
+
+    public function getAuth(): ?Auth
+    {
+        return $this->auth;
     }
 }
