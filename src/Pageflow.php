@@ -197,7 +197,17 @@ class Pageflow
             ini_set('session.use_only_cookies', 1);
             ini_set('session.use_cookies', 1);
             ini_set('session.cookie_httponly', 1);
-            ini_set('session.cookie_secure', 1);
+
+            /**
+             * set session.cookie_secure
+             * HTTPS-only by default; on a plain-HTTP request the browser would silently
+             * reject a Secure cookie, so detect the scheme. Honors X-Forwarded-Proto
+             * for installs behind a TLS-terminating proxy.
+             */
+            $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+            ini_set('session.cookie_secure', $isHttps ? '1' : '0');
+
             ini_set('session.use_trans_sid', 0);
             ini_set('session.cache_limiter', 'nocache');
 
