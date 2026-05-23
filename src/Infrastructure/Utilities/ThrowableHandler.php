@@ -173,10 +173,18 @@ class ThrowableHandler
 
             /** die or redirect */
             if ($isDie) {
-                /** do not redirect if the redirect page is the current page with error */
-                if ($this->fatalRedirectPage != null && (!isset($_SERVER['REQUEST_URI']) || !strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI'])) ) {
-                    if (!(isset($_SERVER['REQUEST_URI']) && strstr($this->fatalRedirectPage, $_SERVER['REQUEST_URI']))) {
-                        header("Location: $this->fatalRedirectPage");
+                /** do not include error page if we're already serving it (avoids fatal loop) */
+                $currentPath = isset($_SERVER['REQUEST_URI']) ? parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) : null;
+                if ($this->fatalRedirectPage != null && $currentPath !== $this->fatalRedirectPage) {
+                    $errorFile = $this->rootDir . '/www' . $this->fatalRedirectPage;
+                    if (is_file($errorFile)) {
+                        while (ob_get_level() > 0) {
+                            ob_end_clean();
+                        }
+                        if (!headers_sent()) {
+                            http_response_code(500);
+                        }
+                        include $errorFile;
                         exit();
                     }
                 }
