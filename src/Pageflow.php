@@ -233,6 +233,33 @@ class Pageflow
             $sessionTtlSeconds = (int) $_ENV['SESSION_TTL_MINUTES'] * 60;
             ini_set('session.gc_maxlifetime', (string) $sessionTtlSeconds);
             ini_set('session.cookie_lifetime', (string) $sessionTtlSeconds);
+
+            /**
+             * bf-cache friendly session cache limiter. Apps that render cart, checkout,
+             * or admin state should set the strict 'nocache' value by defining the
+             * PAGEFLOW_SESSION_CACHE_LIMITER constant before constructing Pageflow:
+             *
+             *     define('PAGEFLOW_SESSION_CACHE_LIMITER', 'nocache');
+             *     $pageflow = new Pageflow(__DIR__);
+             *
+             * Valid values are PHP's session_cache_limiter() values:
+             *   'nocache'           — historical PHP default; emits no-store. Blocks bfcache.
+             *   'private_no_expire' — default here; Cache-Control: private only. bfcache OK.
+             *   'private'           — emits private + max-age. bfcache OK.
+             *   'public'            — emits public + max-age. Wrong for session pages.
+             *   ''                  — no headers emitted; .htaccess/vhost controls caching.
+             *
+             * Default changed from 'nocache' (PHP default) to 'private_no_expire' 
+             * to make session-bearing pages eligible for browser
+             * back/forward cache.
+             */
+
+            session_cache_limiter(
+                defined('PAGEFLOW_SESSION_CACHE_LIMITER')
+                    ? constant('PAGEFLOW_SESSION_CACHE_LIMITER')
+                    : 'private_no_expire'
+            );
+
             session_start();
 
             if (isset($_SESSION[self::SESSION_KEY_LAST_ACTIVITY]) && (time() - $_SESSION[self::SESSION_KEY_LAST_ACTIVITY] > $sessionTtlSeconds)) {
