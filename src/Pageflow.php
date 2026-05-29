@@ -41,6 +41,7 @@ class Pageflow
     const SESSION_KEY_CREATED = 'CREATED';
 
     private $rootDir;
+    private ?string $unsubscribeUrl;
     private $dotEnv;
     private $emailer;
     private $postgres;
@@ -56,9 +57,10 @@ class Pageflow
      */
     private static ?self $instance = null;
 
-    public function __construct(?string $rootDir = null)
+    public function __construct(?string $rootDir = null, ?string $unsubscribeUrl = null)
     {
         $this->rootDir = $rootDir ?? __DIR__ . '/../../../../';
+        $this->unsubscribeUrl = $unsubscribeUrl;
 
         /** all, including future types */
         error_reporting(-1); 
@@ -126,7 +128,7 @@ class Pageflow
                 $smtpPassword,
                 $webmasterEmail,
                 $_ENV['UNSUBSCRIBE_SECRET'] ?? null,
-                $_ENV['UNSUBSCRIBE_URL_BASE'] ?? null
+                $this->unsubscribeUrl
             );
         } else {
             $emailer = null;
